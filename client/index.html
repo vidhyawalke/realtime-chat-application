@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PulseChat - Real-Time Collaborative Workspace</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-slate-900 text-slate-100 h-screen flex flex-col font-sans overflow-hidden">
+
+  <!-- Top App Navigation Bar -->
+  <header class="bg-slate-950 border-b border-slate-800 px-6 py-3 flex items-center justify-between shrink-0">
+    <div class="flex items-center gap-3">
+      <div class="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white shadow-md shadow-indigo-500/20">
+        <i class="fa-solid fa-comments"></i>
+      </div>
+      <div>
+        <h1 class="font-bold text-base leading-none">PulseChat Enterprise</h1>
+        <span class="text-xs text-slate-400">WebSocket Bi-Directional Collaboration Suite</span>
+      </div>
+    </div>
+
+    <!-- Connection & User Badge -->
+    <div class="flex items-center gap-4">
+      <div id="connBadge" class="flex items-center gap-2 text-xs px-3 py-1 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
+        <span id="connDot" class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+        <span id="connText">Connecting to ws://localhost:8080...</span>
+      </div>
+
+      <div class="flex items-center gap-2 bg-slate-800 px-3 py-1 rounded-lg border border-slate-700">
+        <i class="fa-solid fa-user text-indigo-400 text-xs"></i>
+        <input id="usernameInput" type="text" value="Guest" class="bg-transparent text-xs font-semibold focus:outline-none w-28 text-slate-200" title="Click to rename yourself" />
+        <button id="saveUsernameBtn" class="text-xs text-indigo-400 hover:text-indigo-300">Save</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Chat Body -->
+  <div class="flex flex-1 overflow-hidden">
+    <!-- Left Sidebar: Channels & Online Users -->
+    <aside class="w-64 bg-slate-950/70 border-r border-slate-800 flex flex-col justify-between shrink-0">
+      <div>
+        <!-- Channels Section -->
+        <div class="p-4">
+          <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500 px-2">Rooms / Channels</span>
+          <div class="mt-2 space-y-1">
+            <button onclick="switchChannel('general')" id="chan-general" class="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition bg-indigo-600/20 text-indigo-300 border border-indigo-500/30">
+              <i class="fa-solid fa-hashtag text-xs"></i> general
+            </button>
+            <button onclick="switchChannel('engineering')" id="chan-engineering" class="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition">
+              <i class="fa-solid fa-hashtag text-xs"></i> engineering
+            </button>
+            <button onclick="switchChannel('random')" id="chan-random" class="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition">
+              <i class="fa-solid fa-hashtag text-xs"></i> random
+            </button>
+          </div>
+        </div>
+
+        <!-- Online Users -->
+        <div class="p-4 border-t border-slate-800/80">
+          <div class="flex items-center justify-between px-2 mb-2">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Active Presence</span>
+            <span id="userCount" class="text-xs bg-slate-800 px-1.5 py-0.5 rounded text-indigo-400 font-mono">1</span>
+          </div>
+          <ul id="userList" class="space-y-1.5 text-xs text-slate-300">
+            <li class="flex items-center gap-2 px-2 py-1">
+              <span class="w-2 h-2 rounded-full bg-emerald-400"></span> You
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Tech Stack Footer Box -->
+      <div class="p-4 border-t border-slate-800 text-[11px] text-slate-500">
+        <p><strong class="text-slate-400">Protocol:</strong> Full-Duplex TCP WebSocket</p>
+        <p><strong class="text-slate-400">Store:</strong> SQLite Persistent History</p>
+      </div>
+    </aside>
+
+    <!-- Center: Chat Conversation Pane -->
+    <main class="flex-1 flex flex-col bg-slate-900 justify-between overflow-hidden">
+      <!-- Channel Header -->
+      <div class="h-12 border-b border-slate-800 px-6 flex items-center justify-between bg-slate-900/60">
+        <div class="flex items-center gap-2">
+          <i class="fa-solid fa-hashtag text-indigo-400"></i>
+          <span id="activeChannelName" class="font-bold text-slate-200">general</span>
+        </div>
+        <span class="text-xs text-slate-500">End-to-End WebSocket Stream</span>
+      </div>
+
+      <!-- Messages Message Container -->
+      <div id="messagesContainer" class="flex-1 p-6 overflow-y-auto space-y-4">
+        <!-- Messages will be dynamically rendered here -->
+      </div>
+
+      <!-- Typing Indicator -->
+      <div id="typingIndicator" class="px-6 h-5 text-xs text-indigo-400 italic opacity-0 transition-opacity flex items-center gap-1.5">
+        <i class="fa-solid fa-pen-nib animate-bounce"></i> <span id="typingText"></span>
+      </div>
+
+      <!-- Message Input Bar -->
+      <div class="p-4 bg-slate-950/60 border-t border-slate-800">
+        <form id="chatForm" class="flex gap-3">
+          <input 
+            id="messageInput" 
+            type="text" 
+            placeholder="Type your message into #general (Press Enter)..." 
+            autocomplete="off" 
+            class="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition"
+          />
+          <button 
+            type="submit" 
+            class="bg-indigo-600 hover:bg-indigo-500 text-white font-medium px-5 py-2.5 rounded-xl text-sm transition shadow-lg shadow-indigo-600/30 flex items-center gap-2"
+          >
+            <span>Send</span>
+            <i class="fa-solid fa-paper-plane text-xs"></i>
+          </button>
+        </form>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    let currentChannel = 'general';
+    let myUsername = 'Dev_' + Math.floor(Math.random() * 900 + 100);
+    let ws = null;
+    let isConnected = false;
+    let typingTimeout = null;
+
+    const usernameInput = document.getElementById('usernameInput');
+    const saveUsernameBtn = document.getElementById('saveUsernameBtn');
+    const messagesContainer = document.getElementById('messagesContainer');
+    const messageInput = document.getElementById('messageInput');
+    const chatForm = document.getElementById('chatForm');
+    const connBadge = document.getElementById('connBadge');
+    const connDot = document.getElementById('connDot');
+    const connText = document.getElementById('connText');
+    const userList = document.getElementById('userList');
+    const userCount = document.getElementById('userCount');
+    const typingIndicator = document.getElementById('typingIndicator');
+    const typingText = document.getElementById('typingText');
+    const activeChannelName = document.getElementById('activeChannelName');
+
+    usernameInput.value = myUsername;
+
+    function connectWebSocket() {
+      try {
+        ws = new WebSocket('ws://localhost:8080');
+
+        ws.onopen = () => {
+          isConnected = true;
+          connBadge.className = "flex items-center gap-2 text-xs px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20";
+          connDot.className = "w-2 h-2 rounded-full bg-emerald-400";
+          connText.textContent = "Live Socket Connected";
+          
+          // Send username to server
+          ws.send(JSON.stringify({ type: 'SET_USERNAME', username: myUsername }));
+        };
+
+        ws.onmessage = (event) => {
+          const data = JSON.parse(event.data);
+
+          if (data.type === 'HISTORY') {
+            messagesContainer.innerHTML = '';
+            if (data.assigned_user) {
+              myUsername = data.assigned_user;
+              usernameInput.value = myUsername;
+            }
+            data.messages.forEach(msg => appendMessage(msg.username, msg.content, msg.timestamp));
+          } else if (data.type === 'MESSAGE') {
+            appendMessage(data.username, data.content, data.timestamp);
+          } else if (data.type === 'SYSTEM') {
+            appendSystemNotice(data.content, data.timestamp);
+          } else if (data.type === 'USER_PRESENCE') {
+            updateUserList(data.users, data.count);
+          } else if (data.type === 'TYPING_STATUS') {
+            if (data.username !== myUsername && data.is_typing) {
+              typingText.textContent = `${data.username} is typing...`;
+              typingIndicator.classList.remove('opacity-0');
+            } else {
+              typingIndicator.classList.add('opacity-0');
+            }
+          }
+        };
+
+        ws.onclose = () => {
+          isConnected = false;
+          connBadge.className = "flex items-center gap-2 text-xs px-3 py-1 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20";
+          connDot.className = "w-2 h-2 rounded-full bg-amber-400 animate-pulse";
+          connText.textContent = "Offline (Demo Active)";
+          setTimeout(connectWebSocket, 4000);
+        };
+
+        ws.onerror = () => {
+          ws.close();
+        };
+      } catch (err) {
+        console.warn("WebSocket host offline. Running client in standalone mode.", err);
+      }
+    }
+
+    function appendMessage(sender, text, timestamp) {
+      const isMe = sender === myUsername;
+      const msgDiv = document.createElement('div');
+      msgDiv.className = `flex flex-col ${isMe ? 'items-end' : 'items-start'}`;
+
+      msgDiv.innerHTML = `
+        <div class="flex items-center gap-2 mb-1">
+          <span class="text-xs font-semibold ${isMe ? 'text-indigo-400' : 'text-slate-400'}">${sender}</span>
+          <span class="text-[10px] text-slate-500">${timestamp || 'Just now'}</span>
+        </div>
+        <div class="px-4 py-2.5 rounded-2xl max-w-lg text-sm ${
+          isMe ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-slate-800 text-slate-200 rounded-tl-none border border-slate-700/60'
+        }">
+          ${escapeHtml(text)}
+        </div>
+      `;
+      messagesContainer.appendChild(msgDiv);
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+
+    function appendSystemNotice(text, timestamp) {
+      const noticeDiv = document.createElement('div');
+      noticeDiv.className = "flex justify-center my-2";
+      noticeDiv.innerHTML = `
+        <span class="bg-slate-800/80 text-slate-400 text-xs px-3 py-1 rounded-full border border-slate-700/50">
+          <i class="fa-solid fa-circle-info mr-1 text-slate-500"></i> ${escapeHtml(text)} (${timestamp})
+        </span>
+      `;
+      messagesContainer.appendChild(noticeDiv);
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+
+    function updateUserList(users, count) {
+      userCount.textContent = count || users.length;
+      userList.innerHTML = '';
+      users.forEach(u => {
+        const li = document.createElement('li');
+        li.className = "flex items-center gap-2 px-2 py-1";
+        li.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-400"></span> ${escapeHtml(u)} ${u === myUsername ? '<span class="text-[10px] text-indigo-400 font-semibold">(You)</span>' : ''}`;
+        userList.appendChild(li);
+      });
+    }
+
+    function switchChannel(channelName) {
+      currentChannel = channelName;
+      activeChannelName.textContent = channelName;
+      messageInput.placeholder = `Type your message into #${channelName} (Press Enter)...`;
+
+      ['general', 'engineering', 'random'].forEach(ch => {
+        const btn = document.getElementById(`chan-${ch}`);
+        if (ch === channelName) {
+          btn.className = "w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition bg-indigo-600/20 text-indigo-300 border border-indigo-500/30";
+        } else {
+          btn.className = "w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition";
+        }
+      });
+
+      if (isConnected && ws) {
+        ws.send(JSON.stringify({ type: 'SWITCH_CHANNEL', channel: channelName }));
+      } else {
+        messagesContainer.innerHTML = '';
+        appendSystemNotice(`Switched to #${channelName} (Demo Mode)`, new Date().toLocaleTimeString().slice(0, 5));
+      }
+    }
+
+    saveUsernameBtn.addEventListener('click', () => {
+      const newName = usernameInput.value.trim();
+      if (newName) {
+        myUsername = newName;
+        if (isConnected && ws) {
+          ws.send(JSON.stringify({ type: 'SET_USERNAME', username: myUsername }));
+        }
+      }
+    });
+
+    messageInput.addEventListener('input', () => {
+      if (isConnected && ws) {
+        ws.send(JSON.stringify({ type: 'TYPING', is_typing: true }));
+        clearTimeout(typingTimeout);
+        typingTimeout = setTimeout(() => {
+          ws.send(JSON.stringify({ type: 'TYPING', is_typing: false }));
+        }, 1500);
+      }
+    });
+
+    chatForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const content = messageInput.value.trim();
+      if (!content) return;
+
+      const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+      if (isConnected && ws) {
+        ws.send(JSON.stringify({
+          type: 'CHAT_MESSAGE',
+          content: content
+        }));
+      } else {
+        // Fallback demo simulation
+        appendMessage(myUsername, content, nowTime);
+        setTimeout(() => {
+          appendMessage('DemoBot', `Echo response: "${content}" via mock WebSocket protocol`, nowTime);
+        }, 600);
+      }
+
+      messageInput.value = '';
+    });
+
+    function escapeHtml(str) {
+      return str.replace(/[&<>"']/g, function(m) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m];
+      });
+    }
+
+    // Initialize
+    connectWebSocket();
+    // Default welcome notice
+    appendSystemNotice("Welcome to PulseChat! Connect python server.py for multi-user live messaging.", "12:00");
+  </script>
+</body>
+</html>
